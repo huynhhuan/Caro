@@ -3,6 +3,7 @@ import cors from "cors";
 import "dotenv/config";
 import connectDB from "./configs/db.js";
 import connectCloudinary from "./configs/cloudinary.js";
+import userRoutes from "./routes/user.routes.js";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -17,6 +18,8 @@ app.get("/", (req, res) => {
   const { name } = req.body;
   res.send(`Caro Game Backend is running ${name}`);
 });
+
+app.use("/api/users", userRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
