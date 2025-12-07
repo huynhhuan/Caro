@@ -5,9 +5,9 @@ const connectDB = async () => {
     mongoose.connection.on("connected", () =>
       console.log("Database Connected")
     );
-    await mongoose.connect(`${process.env.MONGODB_URI}/caro`);
+    await mongoose.connect(`mongodb+srv://db_game_caro:caropassword@dbcaro.cljiww1.mongodb.net/?appName=dbcaro`);
   } catch (error) {
-    console.error(error.message);
+    console.error("Lỗi kết nối DB:", error.message);
   }
 };
 
