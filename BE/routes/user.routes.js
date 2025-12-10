@@ -3,14 +3,15 @@ import * as userCtrl from "../controllers/user.controller.js";
 
 const router = express.Router();
 
-// Create user
-router.post("/", userCtrl.createUser);
+// Tạo user mới
+router.post("/", userCtrl.registerUser);
+
+// Login bằng username + pass
+router.post("/login", userCtrl.loginUser);
 
 // Get all users
 router.get("/", userCtrl.getUsers);
 
-// Get user by userId
-router.get("/:userId", userCtrl.getUserById);
 
 // Update user by userId
 router.put("/:userId", userCtrl.updateUser); 

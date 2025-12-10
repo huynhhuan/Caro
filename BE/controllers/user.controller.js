@@ -1,26 +1,47 @@
 import User from "../models/User.js";
 
 // Create user
-export const createUser = async (req, res) => {
+export const registerUser = async (req, res) => {
   try {
-    const { name, avatar } = req.body;
+    const { name, avatar, pass } = req.body;
 
-    const exists = await User.findOne({ name });
-    if (exists) {
-      return res.status(400).json({ message: "User already exists" });
+    if (!name || !pass) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu name hoặc pass",
+      });
+    }
+
+    // Kiểm tra trùng tên
+    const existing = await User.findOne({ name });
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        message: "Username đã tồn tại",
+      });
     }
 
     const newUser = await User.create({
       name,
-      avatar,
+      avatar: avatar || "default.png",
+      pass, // sau này nên hash password
     });
 
-    res.status(201).json({
-      message: "User created successfully",
-      data: newUser,
+    return res.status(201).json({
+      success: true,
+      message: "Tạo tài khoản thành công",
+      user: {
+        _id: newUser._id,
+        name: newUser.name,
+        avatar: newUser.avatar,
+      },
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("registerUser error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi tạo user",
+    });
   }
 };
 
@@ -29,19 +50,6 @@ export const getUsers = async (req, res) => {
   try {
     const list = await User.find();
     res.json(list);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// Get 1 user
-export const getUserById = async (req, res) => {
-  try {
-    const user = await User.findOne({ userId: req.params.userId });
-
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    res.json(user);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -78,5 +86,43 @@ export const updateUser = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+export const loginUser = async (req, res) => {
+  try {
+    const { name, pass } = req.body;
+
+    if (!name || !pass) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu name hoặc pass",
+      });
+    }
+
+    const user = await User.findOne({ name, pass });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Sai username hoặc mật khẩu",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Đăng nhập thành công",
+      user: {
+        _id: user._id,
+        name: user.name,
+        avatar: user.avatar,
+      },
+    });
+  } catch (error) {
+    console.error("loginUser error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi login",
+    });
   }
 };
