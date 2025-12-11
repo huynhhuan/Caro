@@ -2,8 +2,8 @@
 import { Router } from "express";
 import {
   createFriendRoom,
+  decideRematchOrLeave,
   joinFriendRoomByCode,
-  setPlayerReady,
 } from "../controllers/room.controller.js";
 
 const router = Router();
@@ -14,7 +14,7 @@ router.post("/friend", createFriendRoom);
 // User B join bằng roomCode
 router.post("/friend/join", joinFriendRoomByCode);
 
-// player nhấn Bắt đầu -> isReady = true
-router.post("/ready", setPlayerReady);
+// User quyết định chơi lại hoặc rời phòng
+router.post("/decision", decideRematchOrLeave);
 
 export default router;

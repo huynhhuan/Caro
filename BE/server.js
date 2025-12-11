@@ -5,6 +5,7 @@ import connectDB from "./configs/db.js";
 import connectCloudinary from "./configs/cloudinary.js";
 import userRoutes from "./routes/user.routes.js";
 import roomRoute from "./routes/room.routes.js";
+import matchRoutes from "./routes/match.routes.js";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -22,6 +23,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/users", userRoutes);
 app.use("/api/rooms", roomRoute);
+app.use("/api/matches", matchRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);

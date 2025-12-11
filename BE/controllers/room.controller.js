@@ -2,6 +2,7 @@
 import mongoose from "mongoose";
 import Room from "../models/Room.js";
 import User from "../models/User.js";
+import Match from "../models/Match.js";
 
 /**
  * POST /rooms/friend
@@ -128,15 +129,52 @@ export const joinFriendRoomByCode = async (req, res) => {
   }
 };
 
+async function createNewMatchForRoom(room) {
+  const playerX = room.players.find((p) => p.symbol === "X");
+  const playerO = room.players.find((p) => p.symbol === "O");
+
+  if (!playerX || !playerO) {
+    throw new Error("Room must have both X and O players to start a new match");
+  }
+
+  const now = new Date();
+
+  const match = await Match.create({
+    roomId: room._id,
+    players: {
+      X: playerX.userId,
+      O: playerO.userId,
+    },
+    config: {
+      boardSize: room.config.boardSize,
+      timePerTurnSec: room.config.timePerTurnSec,
+    },
+    result: {
+      status: "playing",
+      winnerUserId: null,
+      winnerSymbol: null,
+      winningLine: [],
+    },
+  });
+
+  room.status = "playing";
+  room.currentMatchId = match._id;
+  // giữ nguyên isReady = true cho cả 2 (vì vừa bấm “Đấu lại”)
+  await room.save();
+
+  return match;
+}
+
 /**
- * POST /rooms/ready
- * body: { roomId, userId }
- * - Đánh dấu player trong room là isReady = true
- * - Nếu đủ 2 người và cả 2 isReady = true -> room.status = "playing"
+ * POST /rooms/decision
+ * body: { roomId, userId, action: "rematch" | "leave" }
+ *
+ * - rematch: user đồng ý đấu tiếp (set isReady = true, nếu cả 2 true -> tạo match mới)
+ * - leave: user rời phòng (không đấu tiếp)
  */
-export const setPlayerReady = async (req, res) => {
+export const decideRematchOrLeave = async (req, res) => {
   try {
-    const { roomId, userId } = req.body;
+    const { roomId, userId, action } = req.body;
 
     if (!roomId || !mongoose.Types.ObjectId.isValid(roomId)) {
       return res.status(400).json({ message: "Invalid roomId" });
@@ -146,49 +184,103 @@ export const setPlayerReady = async (req, res) => {
       return res.status(400).json({ message: "Invalid userId" });
     }
 
+    if (!["rematch", "leave"].includes(action)) {
+      return res.status(400).json({ message: "Invalid action" });
+    }
+
     const room = await Room.findById(roomId);
 
     if (!room) {
       return res.status(404).json({ message: "Room not found" });
     }
 
-    // Chỉ cho ready khi room đang waiting
-    if (room.status !== "waiting") {
-      return res.status(400).json({ message: "Room is not in waiting status" });
+    // === CASE 1: REMATCH (ĐẤU TIẾP) ===
+    if (action === "rematch") {
+      // chỉ cho rematch khi room đang waiting (vừa xong ván)
+      if (room.status !== "waiting") {
+        return res
+          .status(400)
+          .json({ message: "Room is not in waiting state for rematch" });
+      }
+
+      const player = room.players.find((p) => p.userId.toString() === userId);
+
+      if (!player) {
+        return res.status(404).json({ message: "Player not in this room" });
+      }
+
+      // user này đồng ý đấu lại
+      player.isReady = true;
+
+      const allReady =
+        room.players.length === 2 &&
+        room.players.every((p) => p.isReady === true);
+
+      let match = null;
+
+      if (allReady) {
+        // cả 2 đã đồng ý -> tạo match mới
+        match = await createNewMatchForRoom(room);
+      } else {
+        // mới 1 người đồng ý -> chỉ lưu lại state ready
+        await room.save();
+      }
+
+      return res.json({
+        message: "Decision processed (rematch)",
+        data: {
+          roomId: room._id,
+          status: room.status,
+          players: room.players,
+          allReady,
+          matchId: match ? match._id : null,
+        },
+      });
     }
 
-    // Tìm player tương ứng trong room
-    const player = room.players.find((p) => p.userId.toString() === userId);
+    // === CASE 2: LEAVE (RỜI PHÒNG / KHÔNG ĐẤU TIẾP) ===
+    if (action === "leave") {
+      const beforeCount = room.players.length;
 
-    if (!player) {
-      return res.status(404).json({ message: "Player not in this room" });
+      room.players = room.players.filter((p) => p.userId.toString() !== userId);
+
+      const afterCount = room.players.length;
+
+      if (beforeCount === afterCount) {
+        return res.status(404).json({ message: "Player not in this room" });
+      }
+
+      // Nếu không còn ai -> kết thúc phòng
+      if (afterCount === 0) {
+        room.status = "finished";
+        room.currentMatchId = null;
+      } else if (afterCount === 1) {
+        // còn 1 người -> phòng waiting, reset isReady thằng còn lại
+        room.status = "waiting";
+        room.currentMatchId = null;
+        room.players[0].isReady = false;
+      } else {
+        // phòng hơn 2 người -> set waiting
+        room.status = "waiting";
+        room.currentMatchId = null;
+        room.players.forEach((p) => {
+          p.isReady = false;
+        });
+      }
+
+      await room.save();
+
+      return res.json({
+        message: "Decision processed (leave)",
+        data: {
+          roomId: room._id,
+          status: room.status,
+          players: room.players,
+        },
+      });
     }
-
-    // Đánh dấu đã sẵn sàng
-    player.isReady = true;
-
-    // Kiểm tra nếu đủ 2 người & cả 2 cùng ready -> chuyển room sang playing
-    const allReady =
-      room.players.length === 2 &&
-      room.players.every((p) => p.isReady === true);
-
-    if (allReady) {
-      room.status = "playing";
-    }
-
-    await room.save();
-
-    return res.json({
-      message: "Player ready status updated",
-      data: {
-        roomId: room._id,
-        status: room.status,
-        players: room.players,
-        allReady,
-      },
-    });
   } catch (error) {
-    console.error("setPlayerReady error:", error);
+    console.error("decideRematchOrLeave error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
