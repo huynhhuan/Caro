@@ -12,6 +12,11 @@ const UserSchema = new mongoose.Schema(
       required: true,
     },
 
+    pass: {
+      type: String,
+      required: true,
+    },
+
     avatar: {
       type: String,
       default: null,
@@ -31,6 +36,7 @@ const UserSchema = new mongoose.Schema(
     },
   },
   { timestamps: true }
+  
 );
 
 UserSchema.pre("save", async function () {
